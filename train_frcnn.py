@@ -15,6 +15,8 @@ from keras_frcnn import config, data_generators
 from keras_frcnn import losses as losses
 import keras_frcnn.roi_helpers as roi_helpers
 from keras.utils import generic_utils
+from keras.callbacks import TensorBoard
+import tensorflow as tf
 
 sys.setrecursionlimit(40000)
 
@@ -132,6 +134,9 @@ model_classifier = Model([img_input, roi_input], classifier)
 
 # this is a model that holds both the RPN and the classifier, used to load/save weights for the models
 model_all = Model([img_input, roi_input], rpn[:2] + classifier)
+tbCallBack = TensorBoard(log_dir='log', histogram_freq=1,
+write_graph=True, write_images=True)
+tbCallBack.set_model(model_all)
 
 try:
 	print('loading weights from {}'.format(C.base_net_weights))
@@ -157,9 +162,23 @@ rpn_accuracy_for_epoch = []
 start_time = time.time()
 
 best_loss = np.Inf
+best_loss_epoch=0
 
 class_mapping_inv = {v: k for k, v in class_mapping.items()}
 print('Starting training')
+
+def write_log(callback, names, logs, batch_no):
+	for name, value in zip(names, logs):
+		summary = tf.Summary()
+		summary_value = summary.value.add()
+		summary_value.simple_value = value
+		summary_value.tag = name
+		callback.writer.add_summary(summary, batch_no)
+		callback.writer.flush()
+
+train_names = ['train_loss_rpn_cls', 'train_loss_rpn_reg',
+				'train_loss_class_cls','train_loss_class_reg',
+				'train_total_loss','train_acc']
 
 vis = True
 
@@ -205,7 +224,7 @@ for epoch_num in range(num_epochs):
 				pos_samples = pos_samples[0]
 			else:
 				pos_samples = []
-			
+
 			rpn_accuracy_rpn_monitor.append(len(pos_samples))
 			rpn_accuracy_for_epoch.append((len(pos_samples)))
 
@@ -260,16 +279,19 @@ for epoch_num in range(num_epochs):
 					print('Loss RPN regression: {}'.format(loss_rpn_regr))
 					print('Loss Detector classifier: {}'.format(loss_class_cls))
 					print('Loss Detector regression: {}'.format(loss_class_regr))
+					print("current loss: %.2f, best loss: %.2f at epoch: %d"%(curr_loss,best_loss,best_loss_epoch))
 					print('Elapsed time: {}'.format(time.time() - start_time))
 
 				curr_loss = loss_rpn_cls + loss_rpn_regr + loss_class_cls + loss_class_regr
 				iter_num = 0
 				start_time = time.time()
+				write_log(tbCallBack, train_names, [loss_rpn_cls,loss_rpn_regr,loss_class_cls,loss_class_regr,curr_loss,class_acc], epoch_num)
 
 				if curr_loss < best_loss:
 					if C.verbose:
 						print('Total loss decreased from {} to {}, saving weights'.format(best_loss,curr_loss))
 					best_loss = curr_loss
+					best_loss_epoch=epoch_num
 					model_all.save_weights(C.model_path)
 
 				break
