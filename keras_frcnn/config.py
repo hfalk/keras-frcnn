@@ -40,8 +40,8 @@ class Config:
 		self.classifier_regr_std = [8.0, 8.0, 4.0, 4.0]
 
 		# overlaps for RPN
-		self.rpn_min_overlap = 0.3
-		self.rpn_max_overlap = 0.7
+		self.rpn_min_overlap = 0.6
+		self.rpn_max_overlap = 0.9
 
 		# overlaps for classifier ROIs
 		self.classifier_min_overlap = 0.1
